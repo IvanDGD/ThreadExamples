@@ -1,74 +1,105 @@
-﻿namespace ThreadExamples
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ThreadExamples
 {
     internal class Program
     {
-        static void Main(string[] args)
+        static int processedFiles = 0;
+
+        static async Task Main(string[] args)
         {
+            Console.WriteLine("Enter path to directory:");
+            string directoryPath = Console.ReadLine();
+
+            if (!Directory.Exists(directoryPath))
+            {
+                Console.WriteLine("Directory does not exist.");
+                return;
+            }
+
+            string[] files = Directory.GetFiles(directoryPath, "*.txt", SearchOption.AllDirectories);
+
+            if (files.Length == 0)
+            {
+                Console.WriteLine("No .txt files found.");
+                return;
+            }
+
+            int totalFiles = files.Length;
+            int filesPerPercent = 10;
+            int barLength = 50;
+
+            Stopwatch stopwatch = Stopwatch.StartNew();
+
+            List<Task> tasks = new List<Task>();
+
+            foreach (string file in files)
+            {
+                tasks.Add(ProcessFileAsync(file, totalFiles, filesPerPercent, barLength));
+            }
+
+            await Task.WhenAll(tasks);
+
+            stopwatch.Stop();
+
+            Console.WriteLine();
+            Console.WriteLine($"Processed {totalFiles} files in {stopwatch.Elapsed.TotalMilliseconds:F3} ms.");
+        }
+
+        static async Task ProcessFileAsync(string filePath, int totalFiles, int filesPerPercent, int barLength)
+        {
+            Console.WriteLine($"Started encrypting: {filePath}");
+
             EncryptorDecrypt encryptor = new EncryptorDecrypt();
 
-            Console.WriteLine("Enter file paths separated by ',' :");
-            string input = Console.ReadLine();
-            string[] filePaths = input.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            byte[] originalData = File.ReadAllBytes(filePath);
+            byte[] encryptedData = encryptor.EncryptBytes(originalData);
 
-            Console.WriteLine("Encrypt (e) or Decrypt (d)?");
-            string cypherType = Console.ReadLine();
+            await File.WriteAllBytesAsync(filePath, encryptedData);
 
-            List<(Thread thread, string path)> threads = new List<(Thread, string)>();
+            Console.WriteLine($"Encryption done: {filePath}");
 
-            foreach (var rawPath in filePaths)
+            int done = System.Threading.Interlocked.Increment(ref processedFiles);
+
+            if (done % filesPerPercent == 0 || done == totalFiles)
             {
-                string path = rawPath.Trim();
-
-                if (string.IsNullOrWhiteSpace(path))
-                {
-                    Console.WriteLine("Error: empty path");
-                    continue;
-                }
-
-                Console.WriteLine($"Enter priority for {path} (Lowest, BelowNormal, Normal, AboveNormal, Highest):");
-                string priorityInput = Console.ReadLine();
-
-                Thread thread = new Thread(() =>
-                {
-                    switch (cypherType)
-                    {
-                        case "e":
-                            encryptor.EncryptFile(path);
-                            break;
-                        case "d":
-                            encryptor.DecryptFile(path);
-                            break;
-                        default:
-                            Console.WriteLine("Incorrect input");
-                            break;
-                    }
-                });
-
-                if (Enum.TryParse(priorityInput, out ThreadPriority priority))
-                {
-                    thread.Priority = priority;
-                }
-                else
-                {
-                    Console.WriteLine("Invalid priority. Using Normal.");
-                    thread.Priority = ThreadPriority.Normal;
-                }
-
-                threads.Add((thread, path));
+                DrawProgressBar(done, totalFiles, barLength);
             }
+        }
 
-            foreach (var (thread, _) in threads)
+        static void DrawProgressBar(int done, int total, int barLength)
+        {
+            double percent = (double)done / total;
+            int filled = (int)(percent * barLength);
+
+            StringBuilder bar = new StringBuilder();
+            bar.Append('[');
+            bar.Append(new string('#', filled));
+            bar.Append(new string('.', barLength - filled));
+            bar.Append(']');
+            bar.Append($" {percent * 100:F1}% ({done}/{total})");
+
+            try
             {
-                thread.Start();
-            }
+                int left = Console.CursorLeft;
+                int top = Console.CursorTop;
 
-            foreach (var (thread, _) in threads)
+                if (top > 0)
+                    Console.SetCursorPosition(0, top - 1);
+
+                Console.Write(bar.ToString().PadRight(Console.WindowWidth - 1));
+
+                Console.SetCursorPosition(left, top);
+            }
+            catch
             {
-                thread.Join();
+                Console.WriteLine(bar.ToString());
             }
-
-            Console.WriteLine("All operations completed. Press Enter to exit.");
-            Console.ReadKey();
         }
     }
 }

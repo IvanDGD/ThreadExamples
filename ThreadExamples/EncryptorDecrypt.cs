@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
-using System.Threading;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace ThreadExamples
-{
+{    
     internal class EncryptorDecrypt
     {
         private int shift;
@@ -14,41 +16,16 @@ namespace ThreadExamples
             shift = -5;
         }
 
-        public void EncryptFile(string filePath)
+        public byte[] EncryptBytes(byte[] buffer)
         {
-            ProcessFile(filePath, shift, "Encrypt end");
-        }
-
-        public void DecryptFile(string filePath)
-        {
-            ProcessFile(filePath, 256 - shift, "Decrypt end");
-        }
-
-        private void ProcessFile(string filepath, int shiftAmount, string doneMessage)
-        {
-            byte[] buffer = File.ReadAllBytes(filepath);
             byte[] result = new byte[buffer.Length];
-
-            int lastReportedPercent = -1;
 
             for (int i = 0; i < buffer.Length; i++)
             {
-                result[i] = (byte)((buffer[i] + shiftAmount) % 256);
-
-                int percent = (int)((i + 1) * 100.0 / buffer.Length);
-
-                if (percent != lastReportedPercent && percent % 5 == 0)
-                {
-                    lastReportedPercent = percent;
-                    Console.WriteLine($"{filepath}: {percent}% done");
-                    Thread.Sleep(500);
-                }
+                result[i] = (byte)((buffer[i] + shift + 256) % 256);
             }
 
-            File.WriteAllBytes(filepath, result);
-            Console.WriteLine($"{doneMessage}: {filepath}");
+            return result;
         }
     }
-
-
 }
